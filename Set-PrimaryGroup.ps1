@@ -1,3 +1,5 @@
+Import-Module ActiveDirectory
+
 clear
 $yes = "y" 
 $newline = Write-Output "`r`n"
