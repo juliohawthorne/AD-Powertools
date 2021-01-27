@@ -1,3 +1,3 @@
 # AD-Powertools
 
-Powershell scripts for automated Active Directory Management
+A collection of Powershell scripts for automated Active Directory Management
