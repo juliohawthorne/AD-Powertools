@@ -162,22 +162,26 @@ if ($type -eq $types[0]) {
     Write-Output "Search type not recognized. Enter either name, email or employeeid for the search type."
 }
 
-Write-Output "Retrieved Accounts:"
-
-$users | Format-Table name, givenName, surname, emailAddress, SamAccountName, employeeId, manageremail, Title, Department, l, enabled
+if ($($users -eq $null) -or $($users -eq "")) {
+    Write-Output "None of the accounts listed in the input .csv currently exist on the domain"
+    return
+} else {
+    Write-Output "Retrieved Accounts:"
+    $users | Format-Table name, givenName, surname, emailAddress, SamAccountName, employeeId, manageremail, Title, Department, l, enabled
+}
 
 $Confirm = Read-Host "Enter 'disable' to disable these accounts, 'remove' to remove them from the domain, or any other key to abort"
 
 if ($Confirm -like "remove") {
     $users | ForEach-Object {
-        Remove-ADUser -Confirm:$false
+        Remove-ADUser -Identity $($_.SamAccountName) -Confirm:$false
     }
     Write-Output "Waiting for AD replication"
     Start-Sleep -Seconds 10
     $users | ForEach-Object {
         try { 
-            Get-AdUser $($_.SamAccountName)
-        } catch [ADIdentityNotFoundException] {
+            Get-AdUser -Identity $($_.SamAccountName)
+        } catch [ActiveDirectory.Management.ADIdentityNotFoundException] {
             Write-Output "$($_.name) removed successfully"
         }
     }
@@ -190,7 +194,7 @@ if ($Confirm -like "remove") {
     $users | ForEach-Object {
         try { 
             Get-AdUser $($_.SamAccountName) -Properties * | select-object name,enabled
-        } catch [ADIdentityNotFoundException] {
+        } catch [ActiveDirectory.Management.ADIdentityNotFoundException] {
             Write-Output "$($_.name) was not found. Has this account already been removed?"
         }
     }
