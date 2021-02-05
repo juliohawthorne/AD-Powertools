@@ -68,7 +68,7 @@ function Test-OutFile {
     }
 }
 
-# Trim path to output .csv
+# Trim double-quotes off of path to output .csv
 $OutFile = $OutPath.Trim('"')
 
 $OutFileExists = Test-OutFile -Path $OutFile
