@@ -6,27 +6,30 @@ clear
 function Get-UserByEid {
     [CmdletBinding()]
     param(
-        $EmployeeId
+        $EmployeeId,
+        $Department
     )
-    Get-ADUser -Filter "employeeId -eq '$EmployeeId'" -Properties *
+    Get-ADUser -Filter "employeeId -eq '$EmployeeId'" -Properties * | Where {$_.Department -like "$Department"}
 }
 
 # Search AD using user's name
 function Get-UserByName {
     [CmdletBinding()]
     param(
-        $Name
+        $Name,
+        $Department
     )
-    Get-ADUser -Filter "Name -like '$Name'" -Properties *
+    Get-ADUser -Filter "Name -like '$Name'" -Properties * | Where {$_.Department -like "$Department"}
 }
 
 # search AD using user's emailAddress
 function Get-UserByEmail {
     [CmdletBinding()]
     param(
-        $Email
+        $Email,
+        $Department
     )
-    Get-ADUser -Filter "emailAddress -like '$Email'" -Properties *
+    Get-ADUser -Filter "emailAddress -like '$Email'" -Properties * | Where {$_.Department -like "$Department"}
 }
 
 # Removes special characters from string to avoid parsing errors
@@ -93,7 +96,7 @@ function Remove-StringSpecialCharacter {
 
             FOREACH ($Str in $string) {
                 Write-Verbose -Message "Original String: $Str"
-                $Str -replace $regex, ""
+                $Str -replace $regex, "" -replace "'"
             }
         }
         catch {
@@ -122,16 +125,16 @@ while ($type -eq $null -Or $type -eq "") {
 
 # Output header values based on type match or exit if match unsuccessful
 if ($type -like $types[0]) {
-    Write-Host "The input .csv must ONLY contain the following case-sensitive headers: name"
+    Write-Host -ForegroundColor Green "The input .csv must ONLY contain the following case-sensitive headers: givenName,surname,Department"
     $type = $types[0]
 } elseif ($type -like $types[1]) {
-    Write-Host "The input .csv must ONLY contain the following case-sensitive headers: emailAddress"
+    Write-Host -ForegroundColor Green "The input .csv must ONLY contain the following case-sensitive headers: emailAddress,Department"
     $type = $types[1]
 } elseif ($type -like $types[2]) {
-    Write-Host "The input .csv must ONLY contain the following case-sensitive headers: employeeId"
+    Write-Host -ForegroundColor Green "The input .csv must ONLY contain the following case-sensitive headers: employeeId,Department"
     $type = $types[2]
 } else {
-    Write-Host "Search type not recognized`r`nValid search types: name, email, employeeid"
+    Write-Host -ForegroundColor Red "Search type not recognized`r`nValid search types: name, email, employeeid"
     return
 }
 
@@ -141,7 +144,7 @@ if ($list -eq $null) {
 }
 
 if ($export -eq $null) {
-    Write-Output "The output '.csv' file will include the following information: name, givenName, surname, emailAddress, SamAccountName, employeeId, manageremail, Title"
+    Write-Host -ForegroundColor Green "The output '.csv' file will include the following information: name, givenName, surname, emailAddress, SamAccountName, employeeId, manageremail, Title"
     $export = Read-Host 'Enter the path to the desired output .csv file'
 }
 
@@ -149,7 +152,7 @@ if ($export -eq $null) {
 $userlist = $list.Trim('"')
 $outfile = $export.Trim('"')
 
-# Remove the output filie if it exists
+# Remove the output file if it exists
 if (Test-Path -Path "$outfile") {
     Remove-Item -Path "$outfile"
 }
@@ -157,18 +160,42 @@ if (Test-Path -Path "$outfile") {
 # Search AD for each row of the input file based on type and output results to outfile or write error if previous type matching failed
 if ($type -eq $types[0]) {
     Import-Csv -Path "$userlist" | ForEach-Object {
-    $firstname = Remove-StringSpecialCharacter -String "$($_.givenName)"
-    $lastname = Remove-StringSpecialCharacter -String "$($_.surname)"
-    Get-UserByName -Name "$firstname*$lastname"
-    } | Select-Object name, givenName, surname, emailAddress, SamAccountName, employeeId, manageremail, Title, Department, l | Export-Csv "$outfile" -NoTypeInformation
+    $firstname = Remove-StringSpecialCharacter -String "$($_.givenName)" -SpecialCharacterToKeep "-"," "
+    $lastname = Remove-StringSpecialCharacter -String "$($_.surname)"  -SpecialCharacterToKeep "-"," "
+    $department = Remove-StringSpecialCharacter -String "$($_.Department)" -SpecialCharacterToKeep " "
+    $result = Get-UserByName -Name "*$lastname*" -Department "*$department*" | Where {$_.givenName -like "*$firstname*"}
+    if ($result -eq $null) {
+        Write-Host  -ForegroundColor Yellow "`r`nName lookup for $firstname $lastname`'s AD account returned no results. Attempting to search by Email address..."
+        $result = Get-UserByEmail -Email "*$firstname*$lastname*" -Department "*$department*"
+        if ($result -eq $null) {
+            Write-Host  -ForegroundColor Red "Lookup for $firstname $lastname returned no results. Verify the user's name or try searching AD manually."
+            $nullresult = "Lookup Timestamp: $(Get-Date -UFormat "%m/%d/%Y %T"), no results found"
+            $props = @{
+                givenName = "$firstname"
+                surname = "$lastname"
+                name = "$firstname $lastname"
+                emailAddress = "$nullresult"
+                SamAccountName = "$nullresult"
+                employeeId = "$nullresult"
+                manageremail = "$nullresult"
+                Title = "$nullresult"
+                Department = "$nullresult"
+                l = "$nullresult"
+                Enabled = "$nullresult"
+            }
+            $result = New-Object PSObject -Property $props
+        } 
+    }
+    $result } |
+    Select-Object name, givenName, surname, emailAddress, SamAccountName, employeeId, manageremail, Title, Department, l, Enabled | Export-Csv "$outfile" -NoTypeInformation
 } elseif ($type -eq $types[1]) {
     Import-Csv -Path "$userlist" | ForEach-Object {
-        Get-UserByEmail -Email "$($_.emailAddress)"
-    } | Select-Object name, givenName, surname, emailAddress, SamAccountName, employeeId, manageremail, Title, Department,l | Export-Csv "$outfile" -NoTypeInformation
+        Get-UserByEmail -Email "$($_.emailAddress)" -Department "*$($_.Department)*"
+    } | Select-Object name, givenName, surname, emailAddress, SamAccountName, employeeId, manageremail, Title, Department, l, Enabled | Export-Csv "$outfile" -NoTypeInformation
 } elseif ($type -eq $types[2]) {
     Import-Csv -Path "$userlist" | ForEach-Object {
-    Get-UserByEid -EmployeeId "$($_.employeeId)"
-    } | Select-Object name, givenName, surname, emailAddress, SamAccountName, employeeId, manageremail, Title, Department, l | Export-Csv "$outfile" -NoTypeInformation
-} else {
-    Write-Output "Search type not recognized. Enter either name, email or employeeid for the search type."
+    Get-UserByEid -EmployeeId "$($_.employeeId)" -Department "*$($_.Department)*"
+    } | Select-Object name, givenName, surname, emailAddress, SamAccountName, employeeId, manageremail, Title, Department, l, Enabled  | Export-Csv "$outfile" -NoTypeInformation
+} else { 
+    Write-Output -ForegroundColor Red "Search type not recognized. Enter either name, email or employeeid for the search type."
 }
