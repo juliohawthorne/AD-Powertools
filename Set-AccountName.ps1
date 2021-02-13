@@ -11,10 +11,10 @@ $newline = "`r`n"
 # If no argument passed, get input from command line
 if ( $email -eq $null ) {
     $email = Read-Host -Prompt "[~] Enter the user's current email address"
-    $user = Get-ADUser -Filter "emailAddress -eq '$($email.Trim(' '))'" -Properties Name,DisplayName,givenName,surname,emailAddress,employeeId
+    $user = Get-ADUser -Filter "emailAddress -like '*$($email.TrimEnd())*'" -Properties Name,DisplayName,givenName,surname,emailAddress,employeeId
 }
 else {
-    $user = Get-ADUser -Filter "emailAddress -eq '$($email.Trim(' '))'" -Properties Name,DisplayName,givenName,surname,emailAddress,employeeId
+    $user = Get-ADUser -Filter "emailAddress -like '*$($email.TrimEnd())*'" -Properties Name,DisplayName,givenName,surname,emailAddress,employeeId
 }
 
 
@@ -39,23 +39,23 @@ $eid = $null
 $user | Select-Object -ExpandProperty employeeId | Write-Output -OutVariable +script:eid
 
 # Change user's name, email address, samaccountname and userprincipalname
-    $Script:newgivenname = Read-Host -Prompt "[~] Enter the user's First Name (case-sensitive)"
+    $Script:newgivenname = (Read-Host -Prompt "[~] Enter the user's First Name (case-sensitive)").Trim()
 
-    $Script:newsurname = Read-Host -Prompt "[~] Enter the user's Last Name (case-sensitive)"
+    $Script:newsurname = (Read-Host -Prompt "[~] Enter the user's Last Name (case-sensitive)").Trim()
 
-    $Script:newpre2k = Read-Host -Prompt "[~] Enter the user's new Pre2K (case-sensitive)"
+    $Script:newpre2k = (Read-Host -Prompt "[~] Enter the user's new Pre2K (case-sensitive)").Trim()
 
     $newdisplayname = $newgivenname + " " + $newsurname
 
-    $useremailaddress = $Script:newgivenname.ToLower() + "." + $Script:newsurname.ToLower() + "@carvana.com"
+    $Script:useremailaddress = (Read-Host -Prompt "[~] Enter the user's new email address").ToLower().Trim()
 
-    $userprincipalname = $Script:newgivenname.ToLower() + "." + $Script:newsurname.ToLower() + "@ad.carvana.com"
+    $Script:userprincipalname = $($useremailaddress.TrimEnd("carvana.com")) + "ad.carvana.com"
 
     Write-Host -ForegroundColor Green "[=] New User Information: "
     "[=] Name: " + $newdisplayname
     "[=] Email Address: " + $useremailaddress
     "[=] User Principal Name: " + $userprincipalname
-    "[=] Pre2K: " + $Script:newpre2k
+    "[=] Pre2K: " + $newpre2k
 
     Write-Host -ForegroundColor White -BackgroundColor Red '[!] WARNING: You are about to make changes in Active Directory!!!'
     $confirmation2 = Read-Host -Prompt "[!] Carefully check the information above and enter [y] to continue or any other key to abort"
@@ -92,6 +92,8 @@ $user | Select-Object -ExpandProperty employeeId | Write-Output -OutVariable +sc
         Start-Sleep -Seconds 8
         Write-Host -ForegroundColor Green '[$] Name Change Complete!! Current Name Information:'
         Get-ADUser -Filter "employeeId -eq '$eid'" -Properties * | Select-Object Name,DisplayName,givenName,surname,SamAccountName,emailAddress,UserPrincipalName
+    } else {
+      Write-Host -ForegroundColor Red '[$] Name change process aborted.'  
     }
-Write-Host -ForegroundColor Green '[$] Name Change process complete, thanks for playing!'
+Write-Host -ForegroundColor Green '[$] Name change process complete, thanks for playing!'
 exit
